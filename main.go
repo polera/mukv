@@ -142,9 +142,9 @@ func startServer(port int) {
 						conn.WriteError(err.Error())
 					} else {
 						datastore.Store(rec.key, cmd.Args[2])
-						mu.RLock()
+						mu.Lock()
 						records[rec.key] = rec
-						mu.RUnlock()
+						mu.Unlock()
 						conn.WriteString("OK")
 					}
 
