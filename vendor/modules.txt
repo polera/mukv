@@ -1,0 +1,9 @@
+# github.com/tidwall/btree v1.6.0
+## explicit; go 1.19
+github.com/tidwall/btree
+# github.com/tidwall/match v1.1.1
+## explicit; go 1.15
+github.com/tidwall/match
+# github.com/tidwall/redcon v1.6.2
+## explicit; go 1.15
+github.com/tidwall/redcon
