@@ -10,7 +10,7 @@ import (
 type MuKV struct {
 	sync.RWMutex
 	Datastore       sync.Map
-	ExpirationQueue chan Record
+	expirationQueue chan Record
 	Records         map[string]*Record
 }
 
@@ -35,7 +35,7 @@ func (mkv *MuKV) Receive(key string, ttl, duration string) (*Record, error) {
 
 	if r.TTL > 0 {
 		go func() {
-			mkv.ExpirationQueue <- *r
+			mkv.expirationQueue <- *r
 		}()
 	}
 
@@ -45,7 +45,7 @@ func (mkv *MuKV) Receive(key string, ttl, duration string) (*Record, error) {
 func (mkv *MuKV) StartExpireLoop() {
 	for {
 		select {
-		case rec := <-mkv.ExpirationQueue:
+		case rec := <-mkv.expirationQueue:
 			if rec.TimeToExpiry() < .1 {
 				fmt.Println("got Key: ", rec.Key)
 				mkv.RWMutex.RLock()
@@ -69,10 +69,12 @@ func (mkv *MuKV) StartExpireLoop() {
 
 			}
 			go func() {
-				mkv.ExpirationQueue <- rec
+				mkv.expirationQueue <- rec
 			}()
 		}
-		time.Sleep(10 * time.Millisecond)
+		// Delay 10 milliseconds between expiration queue sweeps
+		delayTimer := time.NewTimer(10 * time.Millisecond)
+		<-delayTimer.C
 	}
 }
 
@@ -83,7 +85,7 @@ func New() *MuKV {
 	return &MuKV{
 		RWMutex:         sync.RWMutex{},
 		Datastore:       sync.Map{},
-		ExpirationQueue: expirationQueue,
+		expirationQueue: expirationQueue,
 		Records:         records,
 	}
 }
