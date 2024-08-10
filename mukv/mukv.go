@@ -44,34 +44,33 @@ func (mkv *MuKV) Receive(key string, ttl, duration string) (*Record, error) {
 
 func (mkv *MuKV) StartExpireLoop() {
 	for {
-		select {
-		case rec := <-mkv.expirationQueue:
-			if rec.TimeToExpiry() < .1 {
-				fmt.Println("got Key: ", rec.Key)
-				mkv.RWMutex.RLock()
-				record, ok := mkv.Records[rec.Key]
-				mkv.RWMutex.RUnlock()
-				if !ok {
-					log.Println("No Record found for Key: ", rec.Key)
-					continue
-				}
-				if record.TTL == 0 {
-					log.Println("Not expiring Key, overwritten with no TTL: ", rec.Key)
-					continue
-				}
-
-				log.Println("Expiring Key: ", rec.Key)
-				mkv.Datastore.Delete(rec.Key)
-				mkv.RWMutex.Lock()
-				delete(mkv.Records, record.Key)
-				mkv.RWMutex.Unlock()
+		rec := <-mkv.expirationQueue
+		if rec.TimeToExpiry() < .1 {
+			fmt.Println("got Key: ", rec.Key)
+			mkv.RWMutex.RLock()
+			record, ok := mkv.Records[rec.Key]
+			mkv.RWMutex.RUnlock()
+			if !ok {
+				log.Println("No Record found for Key: ", rec.Key)
 				continue
-
 			}
-			go func() {
-				mkv.expirationQueue <- rec
-			}()
+			if record.TTL == 0 {
+				log.Println("Not expiring Key, overwritten with no TTL: ", rec.Key)
+				continue
+			}
+
+			log.Println("Expiring Key: ", rec.Key)
+			mkv.Datastore.Delete(rec.Key)
+			mkv.RWMutex.Lock()
+			delete(mkv.Records, record.Key)
+			mkv.RWMutex.Unlock()
+			continue
+
 		}
+		go func() {
+			mkv.expirationQueue <- rec
+		}()
+
 		// Delay 10 milliseconds between expiration queue sweeps
 		delayTimer := time.NewTimer(10 * time.Millisecond)
 		<-delayTimer.C
@@ -98,7 +97,7 @@ type Record struct {
 }
 
 func (r *Record) Age() time.Duration {
-	return time.Now().Sub(r.Created)
+	return time.Since(r.Created)
 }
 
 func (r *Record) Expired() bool {
