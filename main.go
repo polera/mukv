@@ -2,21 +2,27 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strings"
+	"time"
 
 	"github.com/polera/mukv/mukv"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
 )
 
 func startServer(port int) {
 	listenAddr := fmt.Sprintf(":%d", port)
 
-	muKV := mukv.New()
+	zerolog.TimeFieldFormat = time.RFC3339
+	logger := log.With().Str("mukv", "server").Logger()
+
+	muKV := mukv.New(logger)
 
 	go muKV.StartExpireLoop()
 
-	go log.Printf("listening at %s", listenAddr)
+	logger.Info().Str("listenAddr", listenAddr).Msg("listening")
 	err := redcon.ListenAndServe(listenAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			switch strings.ToLower(string(cmd.Args[0])) {
@@ -28,7 +34,7 @@ func startServer(port int) {
 				conn.WriteString("OK")
 				err := conn.Close()
 				if err != nil {
-					log.Fatal("unable to quit cleanly")
+					logger.Fatal().Err(err).Msg("failed to close connection")
 					return
 				}
 			case "set":
@@ -74,7 +80,7 @@ func startServer(port int) {
 						r := muKV.Records[string(cmd.Args[1])]
 						r.Hits += 1
 						muKV.RWMutex.Unlock()
-						log.Printf("Hits for %s: %d", r.Key, r.Hits)
+						logger.Debug().Int(r.Key, r.Hits).Msg("key get")
 						conn.WriteAny(rec)
 					}
 				}
@@ -91,6 +97,23 @@ func startServer(port int) {
 						r := muKV.Records[string(cmd.Args[1])]
 						muKV.RWMutex.RUnlock()
 						conn.WriteInt(int(r.TimeToExpiry()))
+					}
+				}
+			case "touch":
+				if len(cmd.Args) != 2 {
+					errStr := fmt.Sprintf("ERR wrong number of arguments for %s", cmd.Args[0])
+					conn.WriteError(errStr)
+				} else {
+					_, ok := muKV.Datastore.Load(string(cmd.Args[1]))
+					if !ok {
+						conn.WriteNull()
+					} else {
+						muKV.RWMutex.Lock()
+						r := muKV.Records[string(cmd.Args[1])]
+						r.Touch()
+						muKV.RWMutex.Unlock()
+						logger.Debug().Int(r.Key, r.Hits).Msg("key touch")
+						conn.WriteInt(r.Hits)
 					}
 				}
 			case "del":
@@ -120,7 +143,7 @@ func startServer(port int) {
 		},
 	)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal().Err(err).Msg("failed to start server")
 	}
 }
 
