@@ -2,13 +2,15 @@ package mukv
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 type MuKV struct {
 	sync.RWMutex
+	Log             zerolog.Logger
 	Datastore       sync.Map
 	expirationQueue chan Record
 	Records         map[string]*Record
@@ -43,23 +45,25 @@ func (mkv *MuKV) Receive(key string, ttl, duration string) (*Record, error) {
 }
 
 func (mkv *MuKV) StartExpireLoop() {
+	logger := mkv.Log.With().Str("function", "StartExpireLoop").Logger()
 	for {
+		// Delay 10 milliseconds between expiration queue sweeps
+		delayTimer := time.NewTimer(10 * time.Millisecond)
 		rec := <-mkv.expirationQueue
 		if rec.TimeToExpiry() < .1 {
-			fmt.Println("got Key: ", rec.Key)
 			mkv.RWMutex.RLock()
 			record, ok := mkv.Records[rec.Key]
 			mkv.RWMutex.RUnlock()
 			if !ok {
-				log.Println("No Record found for Key: ", rec.Key)
+				logger.Error().Str("key", rec.Key).Msg("no record found")
 				continue
 			}
 			if record.TTL == 0 {
-				log.Println("Not expiring Key, overwritten with no TTL: ", rec.Key)
+				logger.Warn().Str("key", rec.Key).Msg("not expiring key, overwritten with no TTL")
 				continue
 			}
 
-			log.Println("Expiring Key: ", rec.Key)
+			logger.Debug().Str("key", rec.Key).Msg("expiring key")
 			mkv.Datastore.Delete(rec.Key)
 			mkv.RWMutex.Lock()
 			delete(mkv.Records, record.Key)
@@ -71,13 +75,11 @@ func (mkv *MuKV) StartExpireLoop() {
 			mkv.expirationQueue <- rec
 		}()
 
-		// Delay 10 milliseconds between expiration queue sweeps
-		delayTimer := time.NewTimer(10 * time.Millisecond)
 		<-delayTimer.C
 	}
 }
 
-func New() *MuKV {
+func New(logger zerolog.Logger) *MuKV {
 	expirationQueue := make(chan Record)
 	records := make(map[string]*Record)
 
@@ -86,6 +88,7 @@ func New() *MuKV {
 		Datastore:       sync.Map{},
 		expirationQueue: expirationQueue,
 		Records:         records,
+		Log:             logger,
 	}
 }
 
