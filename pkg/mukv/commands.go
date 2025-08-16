@@ -33,10 +33,10 @@ func (mkv *MuKV) handleSet(conn redcon.Conn, cmd redcon.Command) {
 			rec, err = mkv.Receive(string(cmd.Args[1]), "", "")
 		case 5:
 			switch strings.ToLower(string(cmd.Args[3])) {
-			default:
-				rec, err = mkv.Receive(string(cmd.Args[1]), string(cmd.Args[4]), "s")
 			case "px":
 				rec, err = mkv.Receive(string(cmd.Args[1]), string(cmd.Args[4]), "ms")
+			default:
+				rec, err = mkv.Receive(string(cmd.Args[1]), string(cmd.Args[4]), "s")
 			}
 		}
 		if err != nil {

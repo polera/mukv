@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/polera/mukv/mukv"
+	"github.com/polera/mukv/pkg/mukv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
